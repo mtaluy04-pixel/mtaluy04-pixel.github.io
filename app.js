@@ -44,6 +44,7 @@ function spin(){
 }
 
 function renderPlan(){
+  addHistory(state.map(s=>s.i));
   const rows=REELS.map((r,n)=>{const [e,t]=r.items[state[n].i];return {l:r.title,e,t};});
   planEl.innerHTML='<ul>'+rows.map(x=>`<li><span class="em">${x.e}</span><span><b>${x.l}:</b> ${x.t}</span></li>`).join('')+'</ul><button class="copy" id="copy">Copy plan</button>';
   document.getElementById('copy').onclick=async e=>{
@@ -58,3 +59,38 @@ pull.onclick=spin;
 const b=document.querySelector('.bubbles');
 for(let i=0;i<14;i++){const s=document.createElement('i'),z=8+Math.random()*22;
   s.style.cssText=`left:${Math.random()*100}%;width:${z}px;height:${z}px;animation-duration:${10+Math.random()*14}s;animation-delay:${-Math.random()*20}s`;b.appendChild(s);}
+
+/* History (10 most recent) and bookmarks (max 3), kept in this browser's localStorage */
+const MAX_HISTORY=10,MAX_SAVED=3;
+const valid=e=>Array.isArray(e)&&e.length===REELS.length&&e.every((i,n)=>Number.isInteger(i)&&REELS[n].items[i]);
+const store={
+  get(k){try{return (JSON.parse(localStorage.getItem(k))||[]).filter(valid)}catch{return []}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+let history=store.get('reef-history'),saved=store.get('reef-saved');
+const key=e=>e.join('-');
+const isSaved=e=>saved.some(s=>key(s)===key(e));
+const text=e=>e.map((i,n)=>REELS[n].items[i].join(' ')).join(' / ');
+
+function addHistory(e){history.unshift(e);history=history.slice(0,MAX_HISTORY);store.set('reef-history',history);renderLists();}
+
+function toggleSave(k){
+  const e=k.split('-').map(Number);
+  if(isSaved(e)){saved=saved.filter(s=>key(s)!==k);}
+  else if(saved.length>=MAX_SAVED){document.getElementById('savedCount').textContent='Full: remove one first';return;}
+  else{saved.push(e);}
+  store.set('reef-saved',saved);renderLists();
+}
+
+function listHTML(arr,empty){
+  if(!arr.length)return `<p class="hint">${empty}</p>`;
+  return '<ul>'+arr.map(e=>`<li><span>${text(e)}</span><button class="star" data-k="${key(e)}" aria-label="${isSaved(e)?'Remove bookmark':'Bookmark this plan'}" aria-pressed="${isSaved(e)}">${isSaved(e)?'★':'☆'}</button></li>`).join('')+'</ul>';
+}
+
+function renderLists(){
+  document.getElementById('saved').innerHTML=listHTML(saved,'Tap the star on a spin to keep it here.');
+  document.getElementById('history').innerHTML=listHTML(history,'Your last 10 spins show up here.');
+  document.getElementById('savedCount').textContent=saved.length+'/'+MAX_SAVED;
+}
+document.querySelector('.lists').addEventListener('click',ev=>{const b=ev.target.closest('.star');if(b)toggleSave(b.dataset.k);});
+renderLists();
